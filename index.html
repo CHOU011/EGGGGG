@@ -1,0 +1,1887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080A0D">
+<meta name="format-detection" content="telephone=no">
+<title>一颗蛋 · test（赛博碎裂）</title>
+<style>
+/* ============================================================
+   test · 赛博碎裂版
+   这是 index.html 的一个特殊分支：只把「蛋壳碎裂」换成了赛博风格
+   （霓虹六边形 + token 环 + 拖尾 + 冲击波 + 屏幕故障闪），其余全部一样。
+   ============================================================ */
+
+:root{
+  --bg:#0B1020;          /* 深靛蓝：和首屏的赛博底、后面的矩阵绿接得上 */
+  --bg-deep:#070A12;
+  --shell:#F6EFE3;
+  --shell-dark:#D9CDB8;
+  --yolk:#F2B134;
+  --text:#EDE6D8;
+  --muted:#9C9384;
+  --red:#E8574A;
+  --blue:#4A8FE8;
+
+  --cyan:#22E3FF;
+  --magenta:#FF3BD4;
+  --lime:#5BFF9B;
+  --ice:#EAF6FF;
+
+  --page:640px;
+  --egg-max:92px;        /* 蛋少了，所以可以大一点 */
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  font-weight:600;letter-spacing:.02em;-webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overscroll-behavior:none;
+  touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;
+  position:relative;
+}
+/* 底色的一层柔光：fixed 伪元素比 background-attachment 在 iOS 上稳 */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(120% 80% at 50% -14%, #1E2C50 0%, rgba(11,16,32,0) 62%),
+    radial-gradient(90% 60% at 50% 112%, #0F1B36 0%, rgba(11,16,32,0) 72%);
+}
+body.locked{overflow:hidden;height:100vh;height:100svh;}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;}
+.qrfallback{user-select:text;-webkit-user-select:text;}
+
+/* ============================================================
+   背景 · 鸡蛋雨（点完金蛋后会让位给 01 矩阵雨）
+   ============================================================ */
+#rain{
+  position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;user-select:none;
+  transition:opacity .9s ease;
+}
+#rain.off{opacity:0;}
+.rainEgg{
+  position:absolute;top:0;
+  animation-name:rainFall;animation-timing-function:linear;animation-iteration-count:infinite;
+}
+.rainShape{
+  display:block;width:100%;height:100%;
+  border-radius:50% 50% 50% 50% / 58% 58% 42% 42%;
+  background:linear-gradient(158deg,rgba(255,252,245,.95),rgba(217,205,184,.45));
+  animation-name:rainSway;animation-timing-function:ease-in-out;
+  animation-iteration-count:infinite;animation-direction:alternate;
+}
+@keyframes rainFall{
+  from{transform:translate3d(0,-26vh,0) rotate(0deg);}
+  to  {transform:translate3d(0,122vh,0) rotate(420deg);}
+}
+@keyframes rainSway{
+  from{transform:translateX(-16px);}
+  to  {transform:translateX(16px);}
+}
+
+#tint{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity 1.2s ease;}
+body.tint-red  #tint{opacity:1;background:radial-gradient(circle at 50% 34%, rgba(232,87,74,.30), rgba(18,16,14,0) 64%);}
+body.tint-blue #tint{opacity:1;background:radial-gradient(circle at 50% 34%, rgba(74,143,232,.30), rgba(18,16,14,0) 64%);}
+
+/* ============================================================
+   背景 · 01 矩阵雨（点完金蛋之后接管）
+   ============================================================ */
+#matrix{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  display:none;opacity:0;transition:opacity 1s ease;
+}
+
+/* 切到 01 之后的整体配色：全部偏绿 */
+body.matrix{
+  --text:#D6FFE4;
+  --muted:#5FA878;
+  --yolk:#39FF7A;
+}
+body.matrix #panel{background:#07160D;border-color:rgba(57,255,122,.28);}
+body.matrix #panel .body b{color:#39FF7A;}
+body.matrix #panel h3{color:#39FF7A;}
+body.matrix #backdrop{background:rgba(2,10,5,.82);}
+body.matrix .note{border-color:rgba(57,255,122,.20);background:rgba(57,255,122,.03);}
+body.matrix #nextBtn{border-color:rgba(57,255,122,.34);}
+body.matrix #panelClose{color:#5FA878;}
+body.matrix .choiceTitle,
+body.matrix .qrTitle{text-shadow:0 0 18px rgba(57,255,122,.35);}
+body.matrix .qrConfirm{color:#39FF7A;}
+
+/* ---------- 金蛋 + 技术幽灵 ---------- */
+.egg.gold{
+  background:
+    radial-gradient(ellipse 34% 22% at 33% 24%, rgba(255,255,255,.98), rgba(255,255,255,0) 60%),
+    radial-gradient(ellipse 80% 68% at 38% 34%, #FFF6D2 0%, #FFD75E 36%, #E0A21B 70%, #8A5E08 100%);
+  box-shadow:
+    inset -8px -12px 24px rgba(120,70,0,.38),
+    inset 7px 9px 18px rgba(255,255,255,.62),
+    0 0 24px rgba(255,205,70,.55),
+    0 0 70px rgba(255,180,40,.32),
+    0 14px 30px rgba(0,0,0,.6);
+  transition:transform .45s cubic-bezier(.3,.9,.4,1), opacity .45s ease;
+  animation:goldPulse 2.8s ease-in-out infinite;
+}
+@keyframes goldPulse{
+  0%,100%{filter:brightness(1) saturate(1);}
+  50%    {filter:brightness(1.2) saturate(1.15);}
+}
+
+#gold{
+  max-height:0;overflow:hidden;opacity:0;pointer-events:none;
+  transition:max-height .8s ease, opacity .5s ease;
+}
+#gold.show{max-height:1000px;opacity:1;pointer-events:auto;}
+#gold.gone{max-height:0;opacity:0;}
+.goldInner{
+  width:calc(100% - 28px);max-width:var(--page);
+  margin:0 auto;padding:18px 0 12px;text-align:center;
+}
+.goldKicker{
+  margin:0 0 18px;font-size:11.5px;font-weight:500;
+  letter-spacing:.26em;color:var(--muted);
+}
+#goldBtn{display:inline-block;padding:10px;}
+#goldBtn .egg{width:min(74vw,340px);height:auto;aspect-ratio:1/1.3;}
+#gold.show #goldBtn .egg{
+  animation:goldIn .9s cubic-bezier(.2,1.45,.4,1) both, goldPulse 2.8s ease-in-out 1s infinite;
+}
+@keyframes goldIn{
+  0%  {transform:translateY(-70px) scale(.35);opacity:0;}
+  62% {transform:translateY(8px)   scale(1.05);opacity:1;}
+  100%{transform:translateY(0)     scale(1);opacity:1;}
+}
+/* 点下去就碎掉：这里要压过上面那条 animation，否则动不起来 */
+#gold.show #goldBtn.broken .egg{
+  animation:none;
+  opacity:0;
+  transform:scale(1.7);
+  transition:transform .45s cubic-bezier(.3,.9,.4,1), opacity .45s ease;
+}
+.goldHint{
+  margin:24px 0 0;font-size:11.5px;font-weight:500;
+  letter-spacing:.24em;color:var(--muted);opacity:.85;
+  transition:opacity .3s ease;
+}
+#gold.gone .goldHint{opacity:0;}
+
+/* 点完金蛋之后，整屏跳出来的那一句话 */
+#flashLine{
+  position:fixed;inset:0;z-index:58;
+  display:flex;align-items:center;justify-content:center;
+  padding:0 30px;text-align:center;
+  pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 50% 50%, rgba(2,12,6,.70), rgba(1,6,3,.93));
+  transition:opacity .85s ease;
+}
+#flashLine.on{opacity:1;}
+#flashLine b{
+  display:block;font-weight:700;font-size:19px;line-height:2.1;
+  letter-spacing:.16em;color:#DCFFE9;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"PingFang SC","Microsoft YaHei",monospace;
+  /* 绿光 + 一点点红蓝分离，才像信号 */
+  text-shadow:
+    2px 0 rgba(255,59,212,.45),
+   -2px 0 rgba(34,227,255,.45),
+    0 0 20px rgba(57,255,122,.6),
+    0 0 52px rgba(57,255,122,.28);
+}
+#flashLine.on b{animation:flashIn 1s cubic-bezier(.2,.9,.3,1) both;}
+@keyframes flashIn{
+  0%  {opacity:0;transform:translateY(10px);filter:blur(6px);}
+  100%{opacity:1;transform:translateY(0);   filter:blur(0);}
+}
+
+/* 技术幽灵那一段 */
+#ghost{
+  max-height:0;overflow:hidden;opacity:0;pointer-events:none;
+  transition:max-height 1s ease, opacity .8s ease;
+}
+#ghost.show{max-height:1800px;opacity:1;pointer-events:auto;}
+.ghostInner{
+  width:calc(100% - 48px);max-width:560px;
+  margin:0 auto;padding:34px 0 6px;
+}
+.ghostTitle{
+  margin:0 0 22px;text-align:center;
+  font-size:16px;font-weight:700;letter-spacing:.44em;
+  color:var(--yolk);text-indent:.44em;
+}
+.ghostTitle::before{content:"> ";}
+.ghostBody p{
+  margin:0 0 20px;font-size:13.5px;line-height:2.1;font-weight:500;
+  letter-spacing:.03em;color:var(--muted);
+}
+.ghostBody p:last-child{margin-bottom:0;}
+.ghostBody p em{
+  font-style:normal;color:var(--text);
+}
+.ghostBody p b{
+  display:block;font-weight:700;color:var(--text);margin-bottom:2px;
+}
+/* 引文式：大字正文 + 右下角的署名 */
+.ghostBody p.ghostQuote{
+  margin:0 0 0;font-size:17.5px;line-height:2.15;font-weight:700;
+  letter-spacing:.06em;color:var(--text);
+  text-shadow:0 0 20px rgba(57,255,122,.22);
+}
+.ghostBody p.ghostBy{
+  margin:26px 0 0;text-align:right;
+  font-size:12.5px;font-weight:500;letter-spacing:.18em;
+  color:var(--muted);
+}
+body.matrix .ghostBody p.ghostQuote{color:#DCFFE9;}
+body.matrix .ghostBody p.ghostBy{color:#4E9A66;}
+body.matrix .ghostBody p,
+body.matrix .ghostTitle{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"PingFang SC","Microsoft YaHei",monospace;
+}
+
+/* ---------- 通用：蛋 ---------- */
+.egg{
+  display:block;position:relative;
+  border-radius:50% 50% 50% 50% / 58% 58% 42% 42%;
+  background:
+    radial-gradient(ellipse 36% 24% at 34% 26%, rgba(255,255,255,.95), rgba(255,255,255,0) 64%),
+    radial-gradient(ellipse 80% 68% at 38% 34%, #FFFCF5 0%, #F6EFE3 44%, #D9CDB8 100%);
+  box-shadow:
+    inset -8px -12px 22px rgba(120,100,70,.20),
+    inset 6px 8px 16px rgba(255,255,255,.55),
+    0 10px 22px rgba(0,0,0,.5);
+  will-change:transform;
+}
+
+/* ============================================================
+   第一屏 · 小游戏（赛博底 + 网格 + 扫描线）
+   ============================================================ */
+#gameStage{
+  position:fixed;left:0;top:0;width:100%;
+  height:100vh;height:100dvh;
+  z-index:50;overflow:hidden;touch-action:manipulation;
+  background:radial-gradient(circle at 50% 44%, #16202C 0%, #0C1117 58%, #070A0E 100%);
+  transition:opacity .5s ease;
+  cursor:pointer;
+}
+body.started #gameStage{opacity:0;pointer-events:none;}
+
+/* 淡淡的科技网格，中间清楚、边上散掉 */
+#gameStage::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(34,227,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,227,255,.05) 1px, transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:radial-gradient(circle at 50% 44%, #000 18%, transparent 76%);
+  mask-image:radial-gradient(circle at 50% 44%, #000 18%, transparent 76%);
+}
+
+/* 破碎时刷一下扫描线 */
+#scan{
+  position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:repeating-linear-gradient(0deg, rgba(34,227,255,.10) 0 1px, transparent 1px 3px);
+}
+#gameStage.glitch #scan{animation:scanFlash .62s ease-out 1;}
+@keyframes scanFlash{0%{opacity:0;}12%{opacity:1;}100%{opacity:0;}}
+
+/* 破碎时整层蛋抖一下 + 色偏 */
+#gameStage.glitch #eggLayer{animation:glitchShift .34s steps(3) 1;}
+@keyframes glitchShift{
+  0%  {transform:translateX(0);    filter:none;}
+  20% {transform:translateX(-4px); filter:hue-rotate(35deg) saturate(1.7);}
+  45% {transform:translateX(4px);  filter:hue-rotate(-25deg) saturate(1.5);}
+  70% {transform:translateX(-2px); filter:none;}
+  100%{transform:translateX(0);    filter:none;}
+}
+
+#fx{position:absolute;inset:0;display:block;}
+#eggLayer{position:absolute;inset:0;}
+
+.gameEgg{
+  position:absolute;
+  transition:transform .16s ease-in, opacity .16s ease-in;
+  transform-origin:50% 50%;
+}
+
+#dots{
+  position:absolute;left:0;right:0;
+  bottom:calc(26px + env(safe-area-inset-bottom,0px));
+  display:flex;gap:9px;justify-content:center;align-items:center;
+}
+#dots i{
+  display:block;width:7px;height:7px;border-radius:50%;
+  background:transparent;border:1px solid rgba(34,227,255,.45);
+  opacity:.6;transition:background .22s ease, opacity .22s ease, transform .22s ease, box-shadow .22s ease;
+}
+#dots i.on{
+  background:var(--cyan);border-color:var(--cyan);opacity:1;transform:scale(1.2);
+  box-shadow:0 0 10px var(--cyan);
+}
+
+#hint{
+  position:absolute;left:0;right:0;
+  bottom:calc(52px + env(safe-area-inset-bottom,0px));
+  text-align:center;font-size:12px;font-weight:500;
+  letter-spacing:.24em;color:rgba(34,227,255,.62);
+  transition:opacity .3s ease;
+}
+#hint.gone{opacity:0;}
+
+#payoff{
+  position:absolute;left:0;right:0;top:50%;
+  transform:translateY(-50%);
+  padding:0 26px;text-align:center;
+  font-size:16px;line-height:1.9;letter-spacing:.06em;color:var(--text);
+  opacity:0;transition:opacity .7s ease;pointer-events:none;
+  text-shadow:0 0 18px rgba(34,227,255,.35);
+}
+#payoff.on{opacity:1;}
+
+#pillFx{position:fixed;inset:0;z-index:55;pointer-events:none;}
+
+/* ============================================================
+   第二屏 · 内容（和 index.html 完全一致）
+   ============================================================ */
+#page{
+  position:relative;z-index:1;
+  opacity:0;pointer-events:none;
+  transition:opacity .7s ease;
+  padding:0 0 calc(40px + env(safe-area-inset-bottom,0px));
+}
+body.started #page{opacity:1;pointer-events:auto;}
+
+#grid{
+  width:100%;max-width:var(--page);margin:0 auto;
+  padding:calc(14px + env(safe-area-inset-top,0px)) 14px 6px;
+  display:flex;flex-wrap:wrap;justify-content:center;   /* 最后一行不满也居中 */
+  gap:22px 12px;
+}
+.cell{
+  flex:0 0 calc((100% - 24px) / 3);                     /* 一行三个，多余的换行居中 */
+  min-width:0;
+  display:flex;flex-direction:column;align-items:center;gap:16px;
+  padding:6px 0;border-radius:14px;position:relative;
+  transition:transform .18s ease;
+}
+.cell:active{transform:scale(.94);}
+.cell .egg{
+  width:100%;max-width:var(--egg-max);height:auto;aspect-ratio:1/1.3;
+  transform:translate(var(--dx,0px),var(--dy,0px)) rotate(var(--rot,0deg)) scale(var(--sc,1));
+  transition:transform .38s cubic-bezier(.3,.9,.4,1), opacity .34s ease .06s, box-shadow .3s ease;
+}
+.cell .label{
+  font-size:11.5px;font-weight:500;letter-spacing:.1em;
+  color:var(--muted);transition:color .2s ease, opacity .3s ease;
+}
+.cell.done{pointer-events:none;}
+.cell.done .egg{
+  opacity:0;box-shadow:none;
+  transform:translate(var(--dx,0px),var(--dy,0px)) rotate(var(--rot,0deg)) scale(calc(var(--sc,1) * .58));
+}
+.cell.done .label{opacity:0;}
+
+/* 蛋消失时炸出来的霓虹像素块（赛博版：方块 + 外发光，不是蛋壳片） */
+.bit{
+  position:absolute;left:50%;top:36%;width:8px;height:8px;margin:-4px 0 0 -4px;
+  background:currentColor;
+  box-shadow:0 0 8px currentColor, 0 0 18px currentColor;
+  pointer-events:none;z-index:3;
+  animation:bitFly .68s cubic-bezier(.16,.84,.36,1) forwards;
+}
+@keyframes bitFly{
+  0%  {transform:translate(0,0) rotate(0deg) scale(1);opacity:1;}
+  100%{transform:translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(.4);opacity:0;}
+}
+
+/* ============================================================
+   彩蛋：点蛋的时候偶尔整点活
+   ============================================================ */
+.cell.pranking{pointer-events:none;}
+.cell.prank-shake{animation:cellShake .54s ease-in-out;}
+@keyframes cellShake{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  12%{transform:translate(-5px,2px) rotate(-1.6deg);}
+  28%{transform:translate(5px,-2px) rotate(1.6deg);}
+  46%{transform:translate(-4px,1px) rotate(-1deg);}
+  64%{transform:translate(3px,-1px) rotate(.8deg);}
+  82%{transform:translate(-1px,0) rotate(0);}
+}
+.cell.prank-shake .egg{animation:prankGlow .6s ease-out;}
+@keyframes prankGlow{
+  0%{filter:brightness(1);}
+  30%{filter:brightness(1.6) saturate(1.1);}
+  100%{filter:brightness(1);}
+}
+.egg.morphing{animation:morphPulse .56s ease-in-out;}
+@keyframes morphPulse{
+  0%,100%{transform:translate(var(--dx,0px),var(--dy,0px)) rotate(var(--rot,0deg)) scale(var(--sc,1));}
+  50%{transform:translate(var(--dx,0px),calc(var(--dy,0px) - 7px)) rotate(var(--rot,0deg)) scale(calc(var(--sc,1) * 1.13));}
+}
+
+/* 变成别的蛋 */
+.egg.kind-quail{
+  background:
+    radial-gradient(ellipse 36% 24% at 34% 26%, rgba(255,255,255,.95), rgba(255,255,255,0) 64%),
+    radial-gradient(circle at 50% 50%, rgba(86,64,44,.55) 1.4px, rgba(86,64,44,0) 1.9px) 0 0 / 15px 17px,
+    radial-gradient(circle at 50% 50%, rgba(86,64,44,.32) 1.1px, rgba(86,64,44,0) 1.6px) 8px 9px / 23px 25px,
+    radial-gradient(ellipse 80% 68% at 38% 34%, #FFFCF3 0%, #EFE2C6 55%, #C6B08F 100%);
+}
+.egg.kind-duck{
+  background:
+    radial-gradient(ellipse 36% 24% at 34% 26%, rgba(255,255,255,.95), rgba(255,255,255,0) 64%),
+    radial-gradient(ellipse 80% 68% at 38% 34%, #F4FFFC 0%, #CFEDE4 48%, #8FBFAE 100%);
+  box-shadow:
+    inset -8px -12px 22px rgba(30,80,66,.22),
+    inset 6px 8px 16px rgba(255,255,255,.55),
+    0 10px 22px rgba(0,0,0,.5);
+}
+.egg.kind-century{
+  background:
+    radial-gradient(ellipse 34% 22% at 33% 24%, rgba(214,255,236,.5), rgba(255,255,255,0) 62%),
+    radial-gradient(ellipse 80% 68% at 38% 34%, #5B4A2C 0%, #2B1F12 56%, #100A05 100%);
+}
+.egg.kind-dino{
+  background:
+    radial-gradient(circle at 31% 27%, rgba(255,255,255,.22) 0 2px, rgba(255,255,255,0) 3px),
+    radial-gradient(circle at 63% 49%, rgba(0,0,0,.20) 0 3px, rgba(0,0,0,0) 4px),
+    radial-gradient(circle at 42% 74%, rgba(0,0,0,.16) 0 2px, rgba(0,0,0,0) 3px),
+    radial-gradient(circle at 70% 22%, rgba(0,0,0,.12) 0 2px, rgba(0,0,0,0) 3px),
+    radial-gradient(ellipse 80% 68% at 38% 34%, #ADB394 0%, #8B9078 52%, #5A5F4B 100%);
+}
+.egg.kind-pixel{
+  border-radius:42% 42% 46% 46% / 52% 52% 42% 42%;
+  background:
+    linear-gradient(45deg, rgba(80,70,55,.16) 25%, transparent 25%, transparent 75%, rgba(80,70,55,.16) 75%) 0 0 / 16px 16px,
+    linear-gradient(45deg, rgba(80,70,55,.16) 25%, transparent 25%, transparent 75%, rgba(80,70,55,.16) 75%) 8px 8px / 16px 16px,
+    radial-gradient(ellipse 80% 68% at 38% 34%, #FFFCF5 0%, #EFE6D2 60%, #CFC1A8 100%);
+}
+
+/* 气泡 */
+.prankPop{
+  position:absolute;left:50%;top:8px;z-index:8;
+  padding:7px 12px;border-radius:999px;white-space:nowrap;
+  background:rgba(9,13,24,.94);
+  border:1px solid rgba(34,227,255,.42);
+  color:#EAF6FF;font-size:11.5px;font-weight:600;letter-spacing:.06em;
+  box-shadow:0 0 18px rgba(34,227,255,.28),0 8px 18px rgba(0,0,0,.45);
+  pointer-events:none;opacity:0;
+  animation:popIn .3s ease-out forwards, popOut .3s ease-in var(--out,1.5s) forwards;
+}
+@keyframes popIn{
+  0%{opacity:0;transform:translate(-50%,6px) scale(.9);}
+  100%{opacity:1;transform:translate(-50%,-2px) scale(1);}
+}
+@keyframes popOut{
+  0%{opacity:1;transform:translate(-50%,-2px) scale(1);}
+  100%{opacity:0;transform:translate(-50%,-14px) scale(.96);}
+}
+
+.cell.pranked .label{color:rgba(34,227,255,.72);}
+
+#leftHint{
+  max-width:var(--page);margin:12px auto 0;
+  max-height:44px;overflow:hidden;
+  text-align:center;font-size:11.5px;font-weight:500;
+  letter-spacing:.2em;color:var(--muted);opacity:.7;
+  transition:opacity .5s ease, max-height .5s ease, margin .5s ease;
+}
+#leftHint.gone{opacity:0;max-height:0;margin-top:0;}
+
+/* ============================================================
+   第三屏 · 选择
+   ============================================================ */
+#choice{
+  max-height:0;overflow:hidden;opacity:0;pointer-events:none;
+  transition:max-height .7s ease, opacity .5s ease;
+}
+#choice.show{max-height:1200px;opacity:1;pointer-events:auto;}
+#choice.gone{max-height:0;opacity:0;}
+
+.choiceInner{
+  width:calc(100% - 28px);max-width:var(--page);
+  margin:0 auto;padding:22px 0 10px;text-align:center;
+}
+.choiceKicker{margin:0 0 12px;font-size:11.5px;font-weight:500;letter-spacing:.24em;color:var(--muted);}
+.choiceTitle{margin:0 0 10px;font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--text);}
+.choiceSub{margin:0;font-size:13.5px;line-height:1.95;font-weight:500;letter-spacing:.04em;color:var(--muted);}
+
+.pills{display:flex;gap:14px;justify-content:center;align-items:flex-start;margin-top:26px;}
+.pillBtn{
+  flex:1 1 0;min-width:0;max-width:210px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+  padding:18px 8px 18px;border-radius:20px;
+  transition:transform .2s ease, background .2s ease;
+}
+.pillBtn:active{transform:scale(.95);}
+
+.pillShape{
+  display:block;width:56px;height:100px;border-radius:999px;position:relative;
+  box-shadow:
+    inset -7px -9px 16px rgba(0,0,0,.38),
+    inset 6px 7px 14px rgba(255,255,255,.32),
+    0 16px 32px rgba(0,0,0,.6);
+  animation:pillFloat 4.4s ease-in-out infinite;
+}
+.pillShape::after{
+  content:"";position:absolute;left:21%;top:9%;width:26%;height:33%;
+  border-radius:999px;background:rgba(255,255,255,.6);filter:blur(2px);
+}
+.pillShape.red{
+  background:linear-gradient(100deg,#5E150E 0%,#B03225 24%,#E8574A 44%,#FFB6AA 52%,#D3402F 62%,#6E1A12 100%);
+}
+.pillShape.blue{
+  background:linear-gradient(100deg,#0F2340 0%,#2B5490 24%,#4A8FE8 44%,#BBD6FA 52%,#3568B2 62%,#132C52 100%);
+}
+.pillBtn:nth-child(2) .pillShape{animation-delay:-2.2s;}
+@keyframes pillFloat{
+  0%,100%{transform:translateY(0) rotate(-2.5deg);}
+  50%    {transform:translateY(-9px) rotate(2.5deg);}
+}
+.pillName{font-size:13.5px;font-weight:700;letter-spacing:.1em;color:var(--text);}
+.pillDesc{font-size:11px;line-height:1.7;font-weight:500;letter-spacing:.02em;color:var(--muted);}
+
+/* ============================================================
+   第四屏 · 出口
+   ============================================================ */
+#qrsec{
+  max-height:0;overflow:hidden;opacity:0;pointer-events:none;
+  transition:max-height .8s ease, opacity .6s ease;
+}
+#qrsec.show{max-height:1400px;opacity:1;pointer-events:auto;}
+.qrInner{
+  width:calc(100% - 28px);max-width:var(--page);
+  margin:0 auto;padding:30px 0 0;text-align:center;
+}
+.qrConfirm{margin:0 0 14px;font-size:13px;line-height:1.9;font-weight:500;letter-spacing:.06em;color:var(--yolk);opacity:.9;}
+.qrTitle{margin:0 0 10px;font-size:20px;font-weight:700;letter-spacing:.16em;color:var(--text);}
+.qrDesc{margin:0 0 22px;font-size:12.5px;line-height:1.95;font-weight:500;letter-spacing:.02em;color:var(--muted);}
+.shardWrap{position:relative;width:min(240px,70vw);aspect-ratio:1;margin:0 auto 22px;overflow:hidden;}
+.shard{
+  position:absolute;left:50%;top:50%;
+  width:20px;height:13px;
+  clip-path:polygon(0 0, 100% 26%, 58% 100%, 4% 70%);
+  background:linear-gradient(155deg,#FFFCF5,#CFC2AC);
+  opacity:0;pointer-events:none;
+}
+.shardWrap.assembled .shard{animation:shardIn .9s cubic-bezier(.3,.9,.3,1) forwards;}
+@keyframes shardIn{
+  0%{opacity:0;}
+  30%{opacity:.9;}
+  100%{opacity:0;transform:translate(-50%,-50%) rotate(0deg) scale(.35);}
+}
+#qrhost{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  opacity:0;transform:scale(.92);
+  transition:opacity .6s ease .35s, transform .6s cubic-bezier(.3,.9,.3,1) .35s;
+}
+.shardWrap.assembled #qrhost{opacity:1;transform:scale(1);}
+#qrhost img{width:100%;height:100%;object-fit:contain;border-radius:6px;display:block;}
+.qrPh{
+  width:min(190px,58vw);aspect-ratio:1;border-radius:8px;
+  border:1.5px dashed rgba(246,239,227,.3);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  color:var(--muted);text-align:center;padding:14px;
+}
+.qrPh b{font-size:13px;letter-spacing:.14em;font-weight:700;color:var(--text);}
+.qrPh span{font-size:10.5px;line-height:1.7;font-weight:500;letter-spacing:.02em;}
+.qrline{margin:0;font-size:12.5px;line-height:1.95;font-weight:500;color:var(--muted);letter-spacing:.04em;}
+.qrfallback{margin-top:16px;font-size:11px;line-height:1.8;font-weight:500;color:var(--muted);opacity:.75;word-break:break-all;}
+
+.note{
+  width:calc(100% - 28px);max-width:612px;margin:34px auto 0;
+  padding:20px 20px 22px;
+  border:1px solid rgba(150,185,235,.14);
+  border-radius:16px;
+  background:rgba(150,185,235,.035);
+}
+.note h2{margin:0 0 10px;font-size:14px;letter-spacing:.2em;font-weight:700;color:var(--text);}
+.note p{margin:0 0 8px;font-size:13.5px;line-height:1.95;font-weight:500;color:var(--muted);letter-spacing:.02em;}
+.note p:last-child{margin-bottom:0;}
+
+footer{
+  width:calc(100% - 28px);max-width:var(--page);margin:34px auto 0;
+  text-align:center;font-size:11.5px;font-weight:500;
+  letter-spacing:.14em;color:var(--muted);opacity:.7;
+}
+
+/* ============================================================
+   内容面板
+   ============================================================ */
+#backdrop{
+  position:fixed;inset:0;z-index:60;background:rgba(4,7,14,.76);
+  opacity:0;pointer-events:none;transition:opacity .3s ease;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+}
+#backdrop.on{opacity:1;pointer-events:auto;}
+
+#panelPos{
+  position:fixed;z-index:61;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:min(92vw,420px);
+  pointer-events:none;
+}
+#panel{
+  background:#131B2D;
+  border:1px solid rgba(150,185,235,.16);
+  border-radius:18px;
+  padding:24px 22px 20px;
+  box-shadow:0 24px 60px rgba(0,0,0,.6);
+  opacity:0;transform:translate(0,0) scale(.35);
+  transition:transform .4s cubic-bezier(.22,1.2,.4,1), opacity .3s ease;
+  max-height:76vh;overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  pointer-events:none;
+}
+#panel.on{opacity:1;transform:translate(0,0) scale(1);pointer-events:auto;}
+#panel h3{margin:0 0 14px;font-size:15px;font-weight:700;letter-spacing:.18em;color:var(--yolk);}
+#panel .body p{margin:0 0 11px;font-size:14px;line-height:1.95;font-weight:500;color:var(--text);letter-spacing:.015em;}
+#panel .body p:last-child{margin-bottom:0;}
+#panel .body b{color:var(--yolk);font-weight:700;}
+#panel .body .muted{color:var(--muted);}
+#panelClose{
+  position:absolute;right:14px;top:12px;
+  width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:20px;font-weight:400;line-height:1;
+}
+#panelClose:active{background:rgba(246,239,227,.08);}
+.panelActions{margin-top:20px;display:flex;justify-content:center;}
+#nextBtn{
+  padding:12px 24px;border-radius:999px;
+  border:1px solid rgba(246,239,227,.24);
+  font-size:13px;font-weight:700;letter-spacing:.16em;color:var(--text);
+  transition:transform .16s ease, background .2s ease;
+}
+#nextBtn:active{transform:scale(.95);background:rgba(246,239,227,.07);}
+
+/* ============================================================
+   适配
+   ============================================================ */
+@media (min-width:641px){
+  #grid{padding-top:24px;gap:26px 16px;}
+  .cell{flex-basis:calc((100% - 32px) / 3);}
+  .cell .egg{max-width:104px;}
+  .choiceInner{padding-top:30px;}
+  .choiceTitle{font-size:30px;}
+  .goldInner{padding-top:24px;}
+  #payoff{font-size:18px;}
+  #hint{letter-spacing:.3em;}
+  .pillShape{width:62px;height:110px;}
+}
+@media (hover:hover) and (pointer:fine){
+  .cell:hover .egg{
+    transform:translate(var(--dx,0px),calc(var(--dy,0px) - 5px)) rotate(var(--rot,0deg)) scale(var(--sc,1));
+  }
+  .cell:hover .label{color:var(--text);}
+  .pillBtn:hover{background:rgba(246,239,227,.035);}
+  .pillBtn:hover .pillShape{filter:brightness(1.09);}
+  #nextBtn:hover{background:rgba(246,239,227,.07);}
+  #panelClose:hover{background:rgba(246,239,227,.08);color:var(--text);}
+  #gameStage:hover #hint{opacity:.85;}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .cell .egg{max-width:62px;}
+  #grid{padding-top:18px;gap:14px 10px;}
+  #payoff{font-size:14px;}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;}
+  .rainEgg,.rainShape{animation:none !important;}
+  #page,#gameStage,#panel{transition-duration:.15s !important;}
+}
+</style>
+</head>
+<body class="locked">
+
+<div id="rain" aria-hidden="true"></div>
+<canvas id="matrix" aria-hidden="true"></canvas>
+<div id="tint" aria-hidden="true"></div>
+
+<div id="gameStage">
+  <canvas id="fx"></canvas>
+  <div id="eggLayer"></div>
+  <div id="payoff"></div>
+  <div id="hint">点一下</div>
+  <div id="dots"><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="scan" aria-hidden="true"></div>
+</div>
+
+<canvas id="pillFx" aria-hidden="true"></canvas>
+
+<!-- 点完金蛋之后整屏跳出来的那一句话 -->
+<div id="flashLine" aria-hidden="true"><b id="flashLineText"></b></div>
+
+<div id="page">
+
+  <section id="grid"></section>
+  <p id="leftHint"></p>
+
+  <!-- 5 颗全开完，才出现这最后一颗金蛋 -->
+  <section id="gold">
+    <div class="goldInner">
+      <p class="goldKicker" id="goldKicker"></p>
+      <button id="goldBtn" aria-label="最后一颗蛋">
+        <span class="egg gold"></span>
+      </button>
+      <p class="goldHint" id="goldHint"></p>
+    </div>
+  </section>
+
+  <section id="choice">
+    <div class="choiceInner">
+      <p class="choiceKicker" id="choiceKicker"></p>
+      <h2 class="choiceTitle" id="choiceTitle"></h2>
+      <p class="choiceSub" id="choiceSub"></p>
+      <div class="pills">
+        <button class="pillBtn" data-side="red">
+          <span class="pillShape red"></span>
+          <span class="pillName"></span>
+          <span class="pillDesc"></span>
+        </button>
+        <button class="pillBtn" data-side="blue">
+          <span class="pillShape blue"></span>
+          <span class="pillName"></span>
+          <span class="pillDesc"></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 选完药丸之后：技术幽灵 -->
+  <section id="ghost">
+    <div class="ghostInner">
+      <h3 class="ghostTitle" id="ghostTitle"></h3>
+      <div class="ghostBody" id="ghostBody"></div>
+    </div>
+  </section>
+
+  <!-- 最后才给出口 -->
+  <section id="qrsec">
+    <div class="qrInner">
+      <p class="qrConfirm" id="qrConfirm"></p>
+      <h3 class="qrTitle" id="qrTitle"></h3>
+      <p class="qrDesc" id="qrDesc"></p>
+      <div class="shardWrap" id="shardWrap">
+        <div id="qrhost"></div>
+      </div>
+      <p class="qrline" id="qrline"></p>
+      <div id="qrfallback"></div>
+    </div>
+  </section>
+
+  <section class="note">
+    <h2 id="noteTitle"></h2>
+    <p id="noteBody"></p>
+    <p id="noteBody2"></p>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<div id="backdrop"></div>
+<div id="panelPos">
+  <div id="panel">
+    <button id="panelClose" aria-label="关闭">×</button>
+    <h3 id="panelTitle"></h3>
+    <div class="body" id="panelBody"></div>
+    <div class="panelActions"><button id="nextBtn"></button></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   ① 配置区
+   ============================================================ */
+var CONFIG = {
+  QR_IMG: "data:image/png;base64,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",   // 二维码图片的 base64 data URI；留空显示占位方框
+  QR_FALLBACK: "扫不出来就放大、换个角度再扫一次；实在不行，找现场的人拉你进群。",  // 兜底说明（填链接时会自动加上「扫不出来就复制：」）
+  RAIN: true,
+
+  PAYOFF: "一颗蛋能孵出的，只有更多蛋。",
+  NEXT_LABEL: "看看其他的蛋！",
+
+  // 12 颗开完之后那颗金蛋
+  GOLD_KICKER: "还剩最后一颗。",
+  GOLD_HINT: "点它",
+
+  // 点完金蛋，整屏跳出来的那一句话（后面接着才是药丸和二维码）
+  GHOST_LINE: "技术越进步，<br>我们知道的越少",
+
+  CHOICE_KICKER: "最后一颗也开了。",
+  CHOICE_TITLE: "该选了。",
+  CHOICE_SUB: "当创造者，还是当围观者。",
+
+  // 选完药丸之后：技术幽灵
+  GHOST_TITLE: "技术幽灵",
+  GHOST_BODY:
+    "<p class='ghostQuote'>科技发展像幽灵，<br>" +
+    "我们了解的越多，所能做的就越少……</p>" +
+    "<p class='ghostBy'>—— 技术幽灵理论</p>",
+
+  RED: {
+    name: "红丸 · 创造者",
+    desc: "我有想法，我要把它做出来",
+    confirm: "欢迎，创造者。留下你的名字和念头。",
+    qrTitle: "提交你的入境申请",
+    qrDesc: "写下你想做的东西。联系方式只有对接你的人看得到。"
+  },
+  BLUE: {
+    name: "蓝丸 · 围观者",
+    desc: "我先看看，这个世界会长成什么样",
+    confirm: "欢迎，围观者。你可以随时改变主意。",
+    qrTitle: "登记你的围观者编号",
+    qrDesc: "出主意、投票、捧场、搭把手。想动手了，随时换一颗药丸。"
+  },
+
+  QR_LINE: "这是本页唯一的中心。<br>它必须连到外面去。",
+
+  NOTE_TITLE: "这一页可以复制",
+  NOTE_BODY: "它就是一个文件，没有后台，没有账号，不收集任何东西。",
+  NOTE_BODY2: "存下来，把日期和二维码改掉，它就是你那一场的入口。",
+
+  FOOTER: "没有免费的鸡蛋，但有免费的 token"
+};
+
+/* 5 颗蛋的内容 —— 改这里即可换整场活动（建议天数用 Day 1 / Day 3 这种相对写法） */
+var CONTENT = [
+  { label:"是什么", title:"是什么", body:
+    "<p>用 AI 把想法做成网页。</p>" +
+    "<p>唯一硬要求：交出来的东西是一个浏览器能直接打开的 HTML 文件。别的格式不算。</p>" +
+    "<p class='muted'>不会写代码能参加吗？能。不会写，就让 AI 写。</p>" },
+
+  { label:"怎么走", title:"怎么走一遍", body:
+    "<p>两种身份，完全平等，随时可换。</p>" +
+    "<p><b>我来做</b> —— 交创意、做作品。<br><b>我先看</b> —— 出主意、投票、捧场、找资源。</p>" +
+    "<p class='muted'>围观的人想动手，交个创意就能转过来。</p>" +
+    "<p><b>Day 1</b>　进群选一颗　<b>Day 3</b>　想清楚做什么<br>" +
+    "<b>Day 6</b>　交第一版创意 + 群投票<br>" +
+    "<b>Day 7 起</b>　拿 token 动手　<b>Day 14</b>　发出来给大家玩</p>" },
+
+  { label:"交什么", title:"交什么", body:
+    "<p>两样。</p>" +
+    "<p>一、一个 <b>HTML 文件</b>。双击能打开、能玩能用。<br>" +
+    "二、一份 <b>README</b>。说清这是什么、怎么玩。</p>" +
+    "<p class='muted'>没有评委，只有投票。没有审核，只有一条格式限制：得是 HTML。</p>" },
+
+  { label:"token", title:"关于 token", body:
+    "<p>没有免费的鸡蛋。但有免费的 token。</p>" +
+    "<p>这一页里唯一一处不对称：token 是发起人垫的，钱是真实存在的东西。</p>" +
+    "<p><b>三条共识</b></p>" +
+    "<p>一、内容不限 —— 不审题材，只限格式。<br>" +
+    "二、身份自由 —— 随时互转，不绑定。<br>" +
+    "三、所有人帮所有人 —— 没有唯一的资源方。</p>" +
+    "<p class='muted'>拿过别人 token 的人，下一次换你出。</p>" },
+
+  { label:"下一场", title:"下一场", body:
+    "<p>这个活动没有主办方，这一页也不是给某一个城市写的。</p>" +
+    "<p>你在别的城市、别的酒吧、别的群，都能照着办一遍。不用问谁要授权。</p>" +
+    "<p>这一页就是一个文件，没有后台，没有账号，不收集任何东西。<br>" +
+    "<span class='muted'>存下来，改掉日期和二维码，就是你的了。</span></p>" +
+    "<p>最终展示在跳海酒馆，现场演示、现场试玩。<br>" +
+    "<span class='muted'>来不了的人线上也能玩、也能投。</span></p>" }
+];
+
+/* ============================================================
+   ② 背景：鸡蛋雨
+   ============================================================ */
+(function makeRain(){
+  if (!CONFIG.RAIN) return;
+  var host = document.getElementById('rain');
+  var w0 = window.innerWidth;
+  var n = w0 < 520 ? 16 : (w0 < 900 ? 22 : 28);
+  for (var i = 0; i < n; i++){
+    var w = 9 + Math.random() * 17;
+    var e = document.createElement('span');
+    e.className = 'rainEgg';
+    e.style.left = (Math.random() * 104 - 2) + '%';
+    e.style.width = w + 'px';
+    e.style.height = (w * 1.3) + 'px';
+    e.style.opacity = (0.045 + Math.random() * 0.06).toFixed(3);
+    e.style.animationDuration = (15 + Math.random() * 17) + 's';
+    e.style.animationDelay = (-Math.random() * 30) + 's';
+    var s = document.createElement('span');
+    s.className = 'rainShape';
+    s.style.animationDuration = (3.4 + Math.random() * 3.2) + 's';
+    s.style.animationDelay = (-Math.random() * 6) + 's';
+    e.appendChild(s);
+    host.appendChild(e);
+  }
+})();
+
+/* ============================================================
+   ③ 小游戏：点 5 下 → 32 颗 → 赛博碎裂
+   ============================================================ */
+var MAX_TAP = 5;
+var GRID_SPEC = { 1:[1,1], 2:[2,1], 4:[2,2], 8:[4,2], 16:[4,4], 32:[8,4] };
+
+var stage    = document.getElementById('gameStage');
+var eggLayer = document.getElementById('eggLayer');
+var canvas   = document.getElementById('fx');
+var ctx      = canvas.getContext('2d');
+var payoffEl = document.getElementById('payoff');
+var hintEl   = document.getElementById('hint');
+var dotsEl   = document.getElementById('dots');
+var tapCount = 0;
+var busy     = false;
+
+function fitCanvas(){
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = stage.clientWidth, h = stage.clientHeight;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitCanvas();
+window.addEventListener('resize', function(){
+  fitCanvas(); fitPillCanvas(); fitMatrix();
+  if (!busy) renderEggs(Math.pow(2, tapCount), false);
+});
+
+function playArea(){
+  var W = Math.min(stage.clientWidth, 640);
+  var H = Math.min(stage.clientHeight, 940);
+  return { W:W, H:H, ox:(stage.clientWidth - W) / 2, oy:(stage.clientHeight - H) / 2 };
+}
+
+function layout(n){
+  var spec = GRID_SPEC[n];
+  var cols = spec[0], rows = spec[1];
+  var a = playArea();
+  var cw = a.W / cols, ch = a.H / rows;
+  var size = Math.min(cw * 0.62, (ch * 0.70) / 1.3);
+  var CAPX = (n === 1) ? 12 : 34;
+  var CAPY = (n === 1) ? 12 : 34;
+
+  var out = [];
+  for (var r = 0; r < rows; r++){
+    for (var c = 0; c < cols; c++){
+      var sc  = 0.90 + Math.random() * 0.20;
+      var rot = (Math.random() - 0.5) * 13;
+      var w2  = size * sc, h2 = w2 * 1.3;
+      var rad = Math.abs(rot) * Math.PI / 180;
+      var ex  = (w2 * Math.cos(rad) + h2 * Math.sin(rad)) / 2;
+      var ey  = (w2 * Math.sin(rad) + h2 * Math.cos(rad)) / 2;
+      var maxX = Math.max(0, cw / 2 - ex);
+      var maxY = Math.max(0, ch / 2 - ey);
+      var jx = (Math.random() * 2 - 1) * Math.min(maxX * 0.92, CAPX);
+      var jy = (Math.random() * 2 - 1) * Math.min(maxY * 0.92, CAPY);
+      out.push({ x: a.ox + (c + 0.5) * cw + jx, y: a.oy + (r + 0.5) * ch + jy, size:w2, rot:rot });
+    }
+  }
+  return out;
+}
+
+function eggTransform(el, k){
+  el.style.transform = 'rotate(' + el.dataset.rot + 'deg) scale(' + (parseFloat(el.dataset.sc) * k) + ')';
+}
+
+function renderEggs(n, animateIn){
+  eggLayer.innerHTML = '';
+  if (n <= 0) return [];
+  var box = layout(n);
+  box.forEach(function(p, i){
+    var h = p.size * 1.3;
+    var e = document.createElement('div');
+    e.className = 'egg gameEgg';
+    e.style.width = p.size + 'px';
+    e.style.height = h + 'px';
+    e.style.left = p.x + 'px';
+    e.style.top = p.y + 'px';
+    e.style.marginLeft = (-p.size / 2) + 'px';
+    e.style.marginTop = (-h / 2) + 'px';
+    e.dataset.rot = p.rot.toFixed(2);
+    e.dataset.sc  = '1';
+    if (animateIn){
+      e.style.transition = 'none';
+      e.style.opacity = '0';
+      eggTransform(e, 0.25);
+      eggLayer.appendChild(e);
+      (function(el, delay){
+        requestAnimationFrame(function(){
+          requestAnimationFrame(function(){
+            el.style.transition = 'transform .34s cubic-bezier(.2,1.5,.5,1) ' + delay + 'ms, opacity .26s ease ' + delay + 'ms';
+            el.style.opacity = '1';
+            eggTransform(el, 1);
+          });
+        });
+      })(e, i * 14);
+    } else {
+      eggTransform(e, 1);
+      eggLayer.appendChild(e);
+    }
+  });
+  return box;
+}
+
+function shrinkAll(){
+  var olds = eggLayer.querySelectorAll('.egg');
+  for (var i = 0; i < olds.length; i++){
+    olds[i].style.transition = 'transform .16s ease-in, opacity .16s ease-in';
+    eggTransform(olds[i], 0.2);
+    olds[i].style.opacity = '0';
+  }
+}
+
+function updateDots(){
+  var ds = dotsEl.querySelectorAll('i');
+  for (var i = 0; i < ds.length; i++){ ds[i].className = (i < tapCount) ? 'on' : ''; }
+}
+
+/* ============================================================
+   ④ 赛博碎裂引擎
+   —— 蛋壳碎成霓虹六边形线框 + token 双环，带拖尾、外发光、冲击波
+   ============================================================ */
+
+/* 霓虹配色 */
+var NEON = ['#22E3FF','#FF3BD4','#5BFF9B','#EAF6FF','#22E3FF','#FF3BD4'];
+
+/* 六边形路径（所有碎片的基本形状） */
+function hexPath(c, r){
+  c.beginPath();
+  for (var i = 0; i < 6; i++){
+    var a = Math.PI / 180 * (60 * i - 90);
+    var px = Math.cos(a) * r, py = Math.sin(a) * r;
+    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+  }
+  c.closePath();
+}
+
+var parts = [];   // 碎片
+var rings = [];   // 冲击波
+var running = false;
+
+function startFx(){
+  if (!running){ running = true; requestAnimationFrame(tick); }
+}
+
+/* kind: 0 = 壳片（六边形线框）  1 = token（双环）  2 = 像素火花 */
+function spawnBurst(x, y, size, n){
+  n = n || 9;
+  var shells = Math.max(3, Math.round(n * 0.7));
+  for (var i = 0; i < shells; i++){
+    var a = Math.random() * Math.PI * 2;
+    var sp = 2.8 + Math.random() * 6.4;
+    parts.push({
+      x:x, y:y,
+      vx:Math.cos(a) * sp,
+      vy:Math.sin(a) * sp - 3.1,
+      rot:Math.random() * Math.PI,
+      vr:(Math.random() - 0.5) * 0.5,
+      s:size * (0.10 + Math.random() * 0.13),
+      kind:(Math.random() < 0.34) ? 1 : 0,
+      col:NEON[(Math.random() * NEON.length) | 0],
+      life:1,
+      decay:0.008 + Math.random() * 0.009
+    });
+  }
+  var sparks = Math.max(2, n - shells);
+  for (var k = 0; k < sparks; k++){
+    var a2 = Math.random() * Math.PI * 2, sp2 = 4.5 + Math.random() * 9;
+    parts.push({
+      x:x, y:y,
+      vx:Math.cos(a2) * sp2, vy:Math.sin(a2) * sp2 - 3.6,
+      rot:0, vr:0, s:2.6, kind:2,
+      col:'#EAF6FF',
+      life:1, decay:0.020 + Math.random() * 0.022
+    });
+  }
+}
+
+function addRing(x, y, r1, col, w, d){
+  rings.push({ x:x, y:y, r:8, r1:r1, col:col, w:w, life:1, decay:d || 0.024 });
+}
+
+function tick(){
+  var W = stage.clientWidth, H = stage.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'lighter';   // 霓虹的感觉全靠它
+
+  /* --- 冲击波 --- */
+  for (var j = rings.length - 1; j >= 0; j--){
+    var g = rings[j];
+    g.r += (g.r1 - g.r) * 0.15;
+    g.life -= g.decay;
+    if (g.life <= 0){ rings.splice(j, 1); continue; }
+    var gl = Math.max(0, g.life);
+    ctx.globalAlpha = gl * 0.7;
+    ctx.strokeStyle = g.col;
+    ctx.lineWidth = Math.max(0.6, g.w * gl);
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  /* --- 碎片 --- */
+  for (var i = parts.length - 1; i >= 0; i--){
+    var p = parts[i];
+    p.vy += 0.22;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.vr;
+    p.life -= p.decay;
+    if (p.y > H - 3){ p.y = H - 3; p.vy *= -0.34; p.vx *= 0.68; p.vr *= 0.7; }
+    if (p.life <= 0){ parts.splice(i, 1); continue; }
+    var a = Math.max(0, p.life);
+
+    /* 拖尾：从上一帧的位置拉过来一条线 */
+    ctx.globalAlpha = a * 0.34;
+    ctx.strokeStyle = p.col;
+    ctx.lineWidth = Math.max(0.8, p.s * 0.55);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p.x - p.vx * 2.9, p.y - p.vy * 2.9);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+
+    if (p.kind === 2){
+      /* 像素火花 */
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.col;
+      ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s);
+    } else {
+      /* 外发光：先铺一层大的同色 */
+      ctx.globalAlpha = a * 0.20;
+      ctx.fillStyle = p.col;
+      hexPath(ctx, p.s * 2.0);
+      ctx.fill();
+
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = p.col;
+      if (p.kind === 1){
+        /* token：外环 + 内环，像一枚硬币 */
+        ctx.lineWidth = Math.max(1.1, p.s * 0.30);
+        hexPath(ctx, p.s);     ctx.stroke();
+        hexPath(ctx, p.s * 0.46); ctx.stroke();
+      } else {
+        /* 壳片：细六边形线框 + 中心一个小方块 */
+        ctx.lineWidth = Math.max(0.9, p.s * 0.22);
+        hexPath(ctx, p.s);     ctx.stroke();
+        ctx.globalAlpha = a * 0.35;
+        ctx.fillRect(-p.s * 0.17, -p.s * 0.17, p.s * 0.34, p.s * 0.34);
+      }
+    }
+    ctx.restore();
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+
+  if (parts.length || rings.length){ requestAnimationFrame(tick); }
+  else { ctx.clearRect(0, 0, W, H); running = false; }
+}
+
+/* ---------- 点击 ---------- */
+stage.addEventListener('pointerdown', function(){
+  if (busy) return;
+  busy = true;
+  tapCount++;
+  updateDots();
+  if (tapCount === 1) hintEl.classList.add('gone');
+
+  var a = playArea();
+  var cx = a.ox + a.W / 2, cy = a.oy + a.H / 2;
+
+  if (tapCount < MAX_TAP){
+    shrinkAll();
+    setTimeout(function(){
+      var box = renderEggs(Math.pow(2, tapCount), true);
+      // 每分裂一次，来一圈脉冲 + 几粒火花
+      addRing(cx, cy, 150 + tapCount * 60, '#22E3FF', 3, 0.05);
+      box.forEach(function(p){
+        parts.push({
+          x:p.x, y:p.y, vx:(Math.random() - .5) * 3, vy:-1 - Math.random() * 3,
+          rot:0, vr:0, s:2.6, kind:2, col:'#22E3FF',
+          life:1, decay:0.03 + Math.random() * 0.02
+        });
+      });
+      startFx();
+      busy = false;
+    }, 175);
+  } else {
+    shrinkAll();
+    setTimeout(function(){
+      var box = renderEggs(32, true);
+      setTimeout(function(){
+        var es = eggLayer.querySelectorAll('.egg');
+        for (var i = 0; i < es.length; i++){
+          es[i].style.transition = 'transform .2s ease-in, opacity .2s ease-in';
+          eggTransform(es[i], 0.35);
+          es[i].style.opacity = '0';
+        }
+        /* 32 颗一起炸成霓虹碎片（每颗少给几片，保住帧率） */
+        box.forEach(function(p){ spawnBurst(p.x, p.y, Math.max(p.size, 26), 6); });
+        addRing(cx, cy, Math.max(a.W, a.H) * 0.95, '#FF3BD4', 5, 0.020);
+        addRing(cx, cy, Math.max(a.W, a.H) * 0.7,  '#22E3FF', 3, 0.028);
+        startFx();
+
+        /* 屏幕故障闪 */
+        stage.classList.add('glitch');
+        setTimeout(function(){ stage.classList.remove('glitch'); }, 640);
+
+        payoffEl.textContent = CONFIG.PAYOFF;
+        setTimeout(function(){ payoffEl.classList.add('on'); }, 300);
+        setTimeout(function(){
+          document.body.classList.remove('locked');
+          document.body.classList.add('started');
+        }, 2200);
+      }, 640);
+    }, 175);
+  }
+}, { passive:true });
+
+renderEggs(1, false);
+
+/* ============================================================
+   ⑤ 内容：5 颗蛋
+   ============================================================ */
+var gridEl  = document.getElementById('grid');
+var leftEl  = document.getElementById('leftHint');
+var choiceEl= document.getElementById('choice');
+var qrsecEl = document.getElementById('qrsec');
+var left    = CONTENT.length;
+var cells   = [];
+
+CONTENT.forEach(function(item, i){
+  var btn = document.createElement('button');
+  btn.className = 'cell';
+  btn.setAttribute('data-i', i);
+
+  var rot = (Math.random() * 2 - 1) * 5.5;
+  var dx  = (Math.random() * 2 - 1) * 5;
+  var dy  = (Math.random() * 2 - 1) * 11;
+  var sc  = 0.90 + Math.random() * 0.18;
+  btn.style.setProperty('--rot', rot.toFixed(2) + 'deg');
+  btn.style.setProperty('--dx', dx.toFixed(1) + 'px');
+  btn.style.setProperty('--dy', dy.toFixed(1) + 'px');
+  btn.style.setProperty('--sc', sc.toFixed(3));
+
+  var egg = document.createElement('span');
+  egg.className = 'egg';
+
+  var lab = document.createElement('span');
+  lab.className = 'label';
+  lab.textContent = item.label;
+
+  btn.appendChild(egg);
+  btn.appendChild(lab);
+  btn.addEventListener('click', function(){ tapCell(i); });
+  gridEl.appendChild(btn);
+  cells.push(btn);
+});
+
+function updateLeft(){
+  if (left <= 0){ leftEl.classList.add('gone'); return; }
+  leftEl.textContent = '还剩 ' + left + ' 颗';
+}
+
+/* ============================================================
+   ⑤+ 彩蛋：点蛋的时候埋几个坑
+   PRANK_BY_INDEX 决定哪颗蛋演什么，改这里就行：
+   'fake' 骗你一下 / 'morph' 变成别的蛋
+   没写的就是普通蛋。彩蛋一颗只演一次，演完要点第二下才开内容。
+   二维码只在最后出现，这里不放。
+   ============================================================ */
+var PRANK_BY_INDEX = { 1:'fake', 3:'morph' };
+var KINDS = [
+  { cls:'kind-quail',   name:'鹌鹑蛋' },
+  { cls:'kind-duck',    name:'鸭蛋' },
+  { cls:'kind-century', name:'皮蛋' },
+  { cls:'kind-dino',    name:'恐龙蛋' },
+  { cls:'kind-pixel',   name:'像素蛋' }
+];
+var REDUCE_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+function spawnBits(cell, n){
+  for (var k = 0; k < n; k++){
+    var b = document.createElement('span');
+    b.className = 'bit';
+    b.style.color = NEON[k % NEON.length];
+    var a = (k / n) * Math.PI * 2 + Math.random() * 0.7;
+    var d = 24 + Math.random() * 28;
+    b.style.setProperty('--tx', Math.cos(a) * d + 'px');
+    b.style.setProperty('--ty', Math.sin(a) * d - 10 + 'px');
+    b.style.setProperty('--rot', (45 + Math.random() * 300 - 150) + 'deg');
+    b.style.animationDelay = (Math.random() * 0.07).toFixed(3) + 's';
+    cell.appendChild(b);
+    (function(el){ setTimeout(function(){ el.remove(); }, 780); })(b);
+  }
+}
+
+function popCell(cell, text, hold){
+  var old = cell.querySelector('.prankPop');
+  if (old) old.remove();
+  var pop = document.createElement('span');
+  pop.className = 'prankPop';
+  pop.style.setProperty('--out', ((hold || 1500) / 1000) + 's');
+  pop.textContent = text;
+  cell.appendChild(pop);
+  pop.addEventListener('animationend', function(e){
+    if (e.animationName === 'popOut' && pop.parentNode) pop.remove();
+  });
+  // animationend 偶尔等不到（后台标签页 / 动画被关掉），留个兜底
+  setTimeout(function(){ if (pop.parentNode) pop.remove(); }, (hold || 1500) + 600);
+  return pop;
+}
+
+function finishPrank(cell){
+  cell.classList.remove('pranking', 'prank-shake');
+  delete cell.dataset.pranking;
+  var lab = cell.querySelector('.label');
+  if (lab) lab.textContent = '再点一下';
+}
+
+/* ① 假装碎了 */
+function prankFake(cell){
+  cell.classList.add('prank-shake');
+  spawnBits(cell, 10);
+  setTimeout(function(){
+    cell.classList.remove('prank-shake');
+    popCell(cell, '哈哈，骗你一下。', 1500);
+  }, 540);
+  setTimeout(function(){ finishPrank(cell); }, 2150);
+}
+
+/* ② 变成别的蛋 */
+function prankMorph(cell){
+  var egg = cell.querySelector('.egg');
+  var picks = KINDS.slice();
+  for (var i = picks.length - 1; i > 0; i--){
+    var j = (Math.random() * (i + 1)) | 0;
+    var t = picks[i]; picks[i] = picks[j]; picks[j] = t;
+  }
+  picks = picks.slice(0, 2);
+
+  var pop = popCell(cell, '嗯？', 2500);
+  var step = 0;
+  var timer = setInterval(function(){
+    if (step < picks.length){
+      egg.className = 'egg ' + picks[step].cls;
+      void egg.offsetWidth;                 // 强制重排，脉冲动画才会重播
+      egg.classList.add('morphing');
+      pop.textContent = '这是……' + picks[step].name + '？';
+      step++;
+      return;
+    }
+    clearInterval(timer);
+    egg.className = 'egg';
+    void egg.offsetWidth;
+    egg.classList.add('morphing');
+    pop.textContent = '……还是原来那颗。';
+    setTimeout(function(){
+      egg.className = 'egg';
+      finishPrank(cell);
+    }, 780);
+  }, 560);
+}
+
+function tapCell(i){
+  var cell = cells[i];
+  if (!cell || cell.classList.contains('done') || cell.dataset.pranking === '1') return;
+
+  var prank = PRANK_BY_INDEX[i];
+  if (prank && !cell.dataset.pranked && !REDUCE_MOTION){
+    cell.dataset.pranked = '1';
+    cell.dataset.pranking = '1';
+    cell.classList.add('pranked', 'pranking');
+    if (prank === 'fake') prankFake(cell);
+    else if (prank === 'morph') prankMorph(cell);
+    return;
+  }
+  openPanel(i);
+}
+
+/* 读完一颗：霓虹像素炸开 → 蛋消失 */
+function consume(i){
+  var cell = cells[i];
+  if (!cell || cell.classList.contains('done')) return;
+
+  spawnBits(cell, 8);
+
+  cell.classList.add('done');
+  left--;
+  updateLeft();
+  // 5 颗全开完 —— 不直接给药丸，先掉下来一颗金蛋
+  if (left === 0){
+    leftEl.classList.add('gone');
+    setTimeout(foldGrid, 320);      // 空掉的蛋盒先收起来，别让顶上留一大片白
+    setTimeout(revealGold, 620);
+  }
+}
+
+/* 蛋全没了之后，蛋盒本身也就不需要再占着屏幕顶部了 */
+function foldGrid(){
+  var g = gridEl;
+  if (g.dataset.folded) return;
+  g.dataset.folded = '1';
+  g.style.maxHeight = g.offsetHeight + 'px';   // 先定住当前高度，才能过渡到 0
+  g.style.overflow = 'hidden';
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      g.style.transition = 'max-height .55s cubic-bezier(.4,0,.6,1), opacity .45s ease, padding .55s ease';
+      g.style.maxHeight = '0px';
+      g.style.opacity = '0';
+      g.style.paddingTop = '0px';
+      g.style.paddingBottom = '0px';
+    });
+  });
+}
+
+/* ---------- 最后一颗：金蛋 ---------- */
+var goldEl     = document.getElementById('gold');
+var goldBtn    = document.getElementById('goldBtn');
+var goldOpened = false;
+
+function revealGold(){
+  document.getElementById('goldKicker').textContent = CONFIG.GOLD_KICKER;
+  document.getElementById('goldHint').textContent   = CONFIG.GOLD_HINT;
+  goldEl.classList.add('show');
+  setTimeout(function(){
+    goldEl.scrollIntoView({ behavior:'smooth', block:'center' });
+  }, 300);
+}
+
+/* 点金蛋 → 金色炸开 → 整个画风换成 01 矩阵雨 */
+goldBtn.addEventListener('click', function(){
+  if (goldOpened) return;
+  goldOpened = true;
+
+  var r  = goldBtn.getBoundingClientRect();
+  var cx = r.left + r.width / 2;
+  var cy = r.top + r.height / 2;
+
+  goldBtn.classList.add('broken');
+  burstPill('gold', cx, cy);          // 金色碎片 + 冲击波（复用出口那块 canvas）
+
+  // 画风接管
+  setTimeout(function(){
+    document.body.classList.add('matrix');
+    document.getElementById('rain').classList.add('off');
+    startMatrix();
+  }, 430);
+
+  // 整屏跳出一句话，停一会儿
+  setTimeout(function(){
+    document.getElementById('flashLineText').innerHTML = CONFIG.GHOST_LINE;
+    document.getElementById('flashLine').classList.add('on');
+  }, 880);
+
+  // 淡出
+  setTimeout(function(){
+    document.getElementById('flashLine').classList.remove('on');
+  }, 3500);
+
+  // 趁那一句话盖着屏幕，把金蛋那一屏收掉
+  setTimeout(function(){
+    goldEl.classList.remove('show');
+    goldEl.classList.add('gone');
+  }, 3900);
+
+  // 轮到药丸
+  setTimeout(revealChoice, 4300);
+});
+
+function revealChoice(){
+  document.getElementById('choiceKicker').textContent = CONFIG.CHOICE_KICKER;
+  document.getElementById('choiceTitle').textContent  = CONFIG.CHOICE_TITLE;
+  document.getElementById('choiceSub').textContent    = CONFIG.CHOICE_SUB;
+
+  var btns = document.querySelectorAll('.pillBtn');
+  [['red', CONFIG.RED], ['blue', CONFIG.BLUE]].forEach(function(pair, idx){
+    btns[idx].querySelector('.pillName').textContent = pair[1].name;
+    btns[idx].querySelector('.pillDesc').textContent = pair[1].desc;
+  });
+
+  choiceEl.classList.add('show');
+  setTimeout(function(){
+    choiceEl.scrollIntoView({ behavior:'smooth', block:'center' });
+  }, 260);
+}
+
+/* ============================================================
+   ⑥ 背景：01 矩阵雨
+   ============================================================ */
+var matrixCanvas = document.getElementById('matrix');
+var mctx = matrixCanvas.getContext('2d');
+var mCols = 0, mDrops = [], mFont = 15, mRunning = false, mFrame = 0, mGen = 0;
+
+function fitMatrix(){
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = window.innerWidth, h = window.innerHeight;
+  matrixCanvas.width  = Math.round(w * dpr);
+  matrixCanvas.height = Math.round(h * dpr);
+  matrixCanvas.style.width  = w + 'px';
+  matrixCanvas.style.height = h + 'px';
+  mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mFont = w < 520 ? 14 : 16;
+  mCols = Math.ceil(w / mFont);
+  mDrops = [];
+  for (var i = 0; i < mCols; i++) mDrops[i] = Math.random() * -60;   // 负起点 = 错开出场
+}
+
+function matrixTick(){
+  var gen = mGen;
+  if (!mRunning) return;
+  mFrame++;
+  if (mFrame % 2 === 0){          // 30fps 就够了，省电
+    var W = window.innerWidth, H = window.innerHeight;
+    // 半透明黑一层层压，压出拖尾
+    mctx.fillStyle = 'rgba(6,12,8,0.10)';
+    mctx.fillRect(0, 0, W, H);
+    mctx.font = mFont + 'px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    mctx.textBaseline = 'top';
+
+    for (var i = 0; i < mCols; i++){
+      var x = i * mFont;
+      var y = mDrops[i] * mFont;
+      if (y > -mFont && y < H){
+        // 头上一颗亮字
+        mctx.fillStyle = '#D8FFE6';
+        mctx.fillText(Math.random() < 0.5 ? '0' : '1', x, y);
+        // 上一颗压暗一点，形成层次
+        mctx.fillStyle = 'rgba(0,255,90,0.55)';
+        mctx.fillText(Math.random() < 0.5 ? '0' : '1', x, y - mFont);
+      }
+      mDrops[i]++;
+      // 掉出去之后随机等一会儿再从头来
+      if (y > H && Math.random() > 0.972) mDrops[i] = 0;
+    }
+  }
+  if (mRunning && gen === mGen) requestAnimationFrame(matrixTick);
+}
+
+function startMatrix(){
+  fitMatrix();
+  matrixCanvas.style.display = 'block';
+  requestAnimationFrame(function(){ matrixCanvas.style.opacity = '1'; });
+
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) return;
+  mGen++;
+  mRunning = true;
+  requestAnimationFrame(matrixTick);
+}
+
+/* 切到后台就停，回来再接上（用 mGen 防止跑出两条循环） */
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden){
+    mRunning = false;
+  } else if (matrixCanvas.style.display === 'block'){
+    mGen++;
+    mRunning = true;
+    requestAnimationFrame(matrixTick);
+  }
+});
+
+/* ============================================================
+   ⑦ 面板
+   ============================================================ */
+var backdrop = document.getElementById('backdrop');
+var panel    = document.getElementById('panel');
+var panelT   = document.getElementById('panelTitle');
+var panelB   = document.getElementById('panelBody');
+var nextBtn  = document.getElementById('nextBtn');
+var currentI = -1;
+var closing  = false;
+
+function openPanel(i){
+  var r = cells[i].getBoundingClientRect();
+  var cx = r.left + r.width / 2;
+  var cy = r.top + r.height / 2;
+
+  panelT.textContent = CONTENT[i].title;
+  panelB.innerHTML = CONTENT[i].body;
+  currentI = i;
+
+  backdrop.classList.add('on');
+  document.body.style.overflow = 'hidden';
+
+  var dx = cx - window.innerWidth / 2;
+  var dy = cy - window.innerHeight / 2;
+  panel.style.transition = 'none';
+  panel.style.opacity = '0';
+  panel.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(.32)';
+  panel.classList.remove('on');
+
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      panel.style.transition = 'transform .4s cubic-bezier(.22,1.2,.4,1), opacity .3s ease';
+      panel.style.opacity = '1';
+      panel.style.transform = 'translate(0,0) scale(1)';
+      panel.classList.add('on');
+    });
+  });
+}
+
+function closePanel(done){
+  if (closing) return;
+  closing = true;
+  var was = currentI;
+  currentI = -1;
+
+  panel.classList.remove('on');
+  panel.style.transition = 'transform .34s cubic-bezier(.4,0,.7,.4), opacity .3s ease';
+  panel.style.opacity = '0';
+  panel.style.transform = 'translate(0,0) scale(.55)';
+  backdrop.classList.remove('on');
+
+  setTimeout(function(){
+    document.body.style.overflow = '';
+    closing = false;
+    if (was >= 0) consume(was);
+    if (typeof done === 'function') done();
+  }, 350);
+}
+
+backdrop.addEventListener('click', function(){ closePanel(); });
+document.getElementById('panelClose').addEventListener('click', function(){ closePanel(); });
+nextBtn.addEventListener('click', function(){ closePanel(); });
+
+/* ============================================================
+   ⑧ 选药丸
+   ============================================================ */
+var pillCanvas = document.getElementById('pillFx');
+var pctx = pillCanvas.getContext('2d');
+var pillParts = [];
+var pillRings = [];
+var pillRunning = false;
+var chosen = false;
+
+function fitPillCanvas(){
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = window.innerWidth, h = window.innerHeight;
+  pillCanvas.width = Math.round(w * dpr);
+  pillCanvas.height = Math.round(h * dpr);
+  pillCanvas.style.width = w + 'px';
+  pillCanvas.style.height = h + 'px';
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitPillCanvas();
+
+function pillPalette(side){
+  if (side === 'gold') return ['#FFD75E','#FFB020','#FFF6D2','#39FF7A','#EAF6FF'];
+  return side === 'red'
+    ? ['#E8574A','#FF3BD4','#FF9A8F','#EAF6FF']
+    : ['#4A8FE8','#22E3FF','#9CC4F5','#EAF6FF'];
+}
+
+function burstPill(side, x, y){
+  var tones = pillPalette(side);
+  for (var i = 0; i < 130; i++){
+    var a = Math.random() * Math.PI * 2;
+    var sp = 3 + Math.random() * 12;
+    pillParts.push({
+      x:x, y:y,
+      vx:Math.cos(a) * sp, vy:Math.sin(a) * sp - 2.2,
+      rot:Math.random() * Math.PI, vr:(Math.random() - 0.5) * 0.5,
+      s:6 + Math.random() * 15,
+      kind:(Math.random() < 0.35) ? 1 : 0,
+      col:tones[(Math.random() * tones.length) | 0],
+      life:1, decay:0.011 + Math.random() * 0.012
+    });
+  }
+  pillRings.push({ x:x, y:y, r:10, r1:Math.max(window.innerWidth, window.innerHeight) * 0.85,
+                   col:tones[0], w:4, life:1, decay:0.022 });
+  if (!pillRunning){ pillRunning = true; requestAnimationFrame(pillTick); }
+}
+
+function pillTick(){
+  var W = window.innerWidth, H = window.innerHeight;
+  pctx.clearRect(0, 0, W, H);
+  pctx.globalCompositeOperation = 'lighter';
+
+  for (var j = pillRings.length - 1; j >= 0; j--){
+    var g = pillRings[j];
+    g.r += (g.r1 - g.r) * 0.15;
+    g.life -= g.decay;
+    if (g.life <= 0){ pillRings.splice(j, 1); continue; }
+    var gl = Math.max(0, g.life);
+    pctx.globalAlpha = gl * 0.7;
+    pctx.strokeStyle = g.col;
+    pctx.lineWidth = Math.max(0.6, g.w * gl);
+    pctx.beginPath(); pctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); pctx.stroke();
+  }
+
+  for (var i = pillParts.length - 1; i >= 0; i--){
+    var p = pillParts[i];
+    p.vy += 0.26;
+    p.x += p.vx; p.y += p.vy;
+    p.rot += p.vr;
+    p.life -= p.decay;
+    if (p.y > H + 40) p.life = 0;
+    if (p.life <= 0){ pillParts.splice(i, 1); continue; }
+    var a = Math.max(0, p.life);
+
+    pctx.globalAlpha = a * 0.30;
+    pctx.strokeStyle = p.col;
+    pctx.lineWidth = Math.max(0.8, p.s * 0.5);
+    pctx.lineCap = 'round';
+    pctx.beginPath();
+    pctx.moveTo(p.x - p.vx * 2.6, p.y - p.vy * 2.6);
+    pctx.lineTo(p.x, p.y);
+    pctx.stroke();
+
+    pctx.save();
+    pctx.translate(p.x, p.y);
+    pctx.rotate(p.rot);
+    pctx.globalAlpha = a * 0.18;
+    pctx.fillStyle = p.col;
+    hexPath(pctx, p.s * 1.9);
+    pctx.fill();
+    pctx.globalAlpha = a;
+    pctx.strokeStyle = p.col;
+    if (p.kind === 1){
+      pctx.lineWidth = Math.max(1.1, p.s * 0.3);
+      hexPath(pctx, p.s); pctx.stroke();
+      hexPath(pctx, p.s * 0.46); pctx.stroke();
+    } else {
+      pctx.lineWidth = Math.max(0.9, p.s * 0.22);
+      hexPath(pctx, p.s); pctx.stroke();
+    }
+    pctx.restore();
+  }
+
+  pctx.globalCompositeOperation = 'source-over';
+  pctx.globalAlpha = 1;
+
+  if (pillParts.length || pillRings.length){ requestAnimationFrame(pillTick); }
+  else { pctx.clearRect(0, 0, W, H); pillRunning = false; }
+}
+
+function choosePill(side){
+  if (chosen) return;
+  chosen = true;
+
+  var data  = (side === 'red') ? CONFIG.RED : CONFIG.BLUE;
+  var btn   = document.querySelector('.pillBtn[data-side="' + side + '"]');
+  var shape = btn.querySelector('.pillShape');
+  var r     = shape.getBoundingClientRect();
+
+  var fly = shape.cloneNode(true);
+  fly.classList.add('flying');
+  fly.style.cssText +=
+    ';position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;' +
+    'width:' + r.width + 'px;height:' + r.height + 'px;margin:0;z-index:70;' +
+    'animation:none;' +
+    'transition:transform .52s cubic-bezier(.4,0,.6,1), opacity .32s ease .42s;';
+  document.body.appendChild(fly);
+
+  var dx = window.innerWidth / 2 - (r.left + r.width / 2);
+  var dy = window.innerHeight / 2 - (r.top + r.height / 2);
+
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      fly.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(2.9)';
+      fly.style.opacity = '0';
+    });
+  });
+
+  choiceEl.classList.remove('show');
+  choiceEl.classList.add('gone');
+
+  setTimeout(function(){
+    if (fly.parentNode) fly.remove();
+    burstPill(side, window.innerWidth / 2, window.innerHeight / 2);
+    document.body.classList.add('tint-' + side);
+  }, 520);
+
+  // 先给技术幽灵，再给出口
+  setTimeout(function(){
+    document.getElementById('ghostTitle').textContent = CONFIG.GHOST_TITLE;
+    document.getElementById('ghostBody').innerHTML    = CONFIG.GHOST_BODY;
+    document.getElementById('qrConfirm').textContent  = data.confirm;
+    document.getElementById('qrTitle').textContent    = data.qrTitle;
+    document.getElementById('qrDesc').textContent     = data.qrDesc;
+    document.getElementById('ghost').classList.add('show');
+    qrsecEl.classList.add('show');
+    document.getElementById('ghost').scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 680);
+}
+
+document.querySelectorAll('.pillBtn').forEach(function(b){
+  b.addEventListener('click', function(){ choosePill(b.getAttribute('data-side')); });
+});
+
+/* ============================================================
+   ⑨ 出口：二维码
+   ============================================================ */
+var shardWrap = document.getElementById('shardWrap');
+var qrhost    = document.getElementById('qrhost');
+
+(function makeShards(){
+  var N = 14;
+  for (var i = 0; i < N; i++){
+    var s = document.createElement('div');
+    s.className = 'shard';
+    var a = (i / N) * Math.PI * 2;
+    s.style.transform = 'translate(-50%,-50%) translate(' + (Math.cos(a) * 190) + 'px,' +
+                        (Math.sin(a) * 190) + 'px) rotate(' + (a * 57.3 + 40) + 'deg)';
+    shardWrap.insertBefore(s, shardWrap.firstChild);
+  }
+})();
+
+(function buildQR(){
+  if (CONFIG.QR_IMG){
+    var img = document.createElement('img');
+    img.src = CONFIG.QR_IMG;
+    img.alt = '二维码';
+    qrhost.appendChild(img);
+  } else {
+    var ph = document.createElement('div');
+    ph.className = 'qrPh';
+    ph.innerHTML = '<b>二维码占位</b><span>把群码图片转成 base64<br>填进 CONFIG.QR_IMG</span>';
+    qrhost.appendChild(ph);
+  }
+  var fb = document.getElementById('qrfallback');
+  fb.className = 'qrfallback';
+  fb.textContent = CONFIG.QR_FALLBACK
+    ? (/^https?:/i.test(CONFIG.QR_FALLBACK)
+        ? '扫不出来就复制：' + CONFIG.QR_FALLBACK
+        : CONFIG.QR_FALLBACK)
+    : '';
+})();
+
+/* 二维码滚进视野时才触发碎片滑入（这一屏默认是收起的，所以这时候才注册得进来） */
+if ('IntersectionObserver' in window){
+  var qrIO = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if (en.isIntersecting){
+        shardWrap.classList.add('assembled');
+        qrIO.disconnect();
+      }
+    });
+  }, { threshold:0.35 });
+  qrIO.observe(shardWrap);
+} else {
+  setTimeout(function(){ shardWrap.classList.add('assembled'); }, 2600);
+}
+
+/* ============================================================
+   ⑩ 静态文案
+   ============================================================ */
+document.getElementById('noteTitle').textContent = CONFIG.NOTE_TITLE;
+document.getElementById('noteBody').textContent  = CONFIG.NOTE_BODY;
+document.getElementById('noteBody2').textContent = CONFIG.NOTE_BODY2;
+document.getElementById('qrline').innerHTML      = CONFIG.QR_LINE;
+document.getElementById('footer').textContent    = CONFIG.FOOTER;
+nextBtn.textContent = CONFIG.NEXT_LABEL;
+updateLeft();
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && currentI >= 0){ closePanel(); return; }
+  if ((e.key === ' ' || e.key === 'Enter') && !document.body.classList.contains('started')){
+    e.preventDefault();
+    stage.dispatchEvent(new Event('pointerdown'));
+  }
+});
+</script>
+</body>
+</html>
