@@ -105,7 +105,6 @@ body.matrix #panel{background:#07160D;border-color:rgba(57,255,122,.28);}
 body.matrix #panel .body b{color:#39FF7A;}
 body.matrix #panel h3{color:#39FF7A;}
 body.matrix #backdrop{background:rgba(2,10,5,.82);}
-body.matrix .note{border-color:rgba(57,255,122,.20);background:rgba(57,255,122,.03);}
 body.matrix #nextBtn{border-color:rgba(57,255,122,.34);}
 body.matrix #panelClose{color:#5FA878;}
 body.matrix .choiceTitle,
@@ -459,6 +458,59 @@ body.started #page{opacity:1;pointer-events:auto;}
     radial-gradient(ellipse 80% 68% at 38% 34%, #FFFCF5 0%, #EFE6D2 60%, #CFC1A8 100%);
 }
 
+/* 打蛋：荷包蛋 + 小鸡 */
+.egg.away{
+  opacity:0;
+  transform:translate(var(--dx,0px),var(--dy,0px)) rotate(var(--rot,0deg)) scale(calc(var(--sc,1) * .55));
+}
+.friedEgg{
+  position:absolute;left:50%;top:44%;width:96px;height:74px;z-index:8;
+  transform:translate(-50%,-50%);pointer-events:none;
+  filter:drop-shadow(0 8px 12px rgba(0,0,0,.42));
+  animation:friedIn .55s cubic-bezier(.2,1.45,.4,1) both,
+            friedWobble 1.5s ease-in-out .55s infinite;
+}
+.friedEgg .white{
+  position:absolute;display:block;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, #FFFEF9 0%, #FCF3E1 60%, #EFE1C4 100%);
+  box-shadow:inset 0 0 10px rgba(208,188,148,.45);
+}
+.friedEgg .w1{left:1%;top:14%;width:64%;height:70%;transform:rotate(-8deg);}
+.friedEgg .w2{left:27%;top:2%;width:68%;height:80%;transform:rotate(7deg);}
+.friedEgg .w3{left:15%;top:24%;width:76%;height:64%;border-radius:52% 48% 46% 54% / 60% 50% 50% 40%;transform:rotate(2deg);}
+.friedEgg .yolk{
+  position:absolute;left:50%;top:52%;width:34px;height:34px;margin:-17px 0 0 -17px;
+  border-radius:50%;
+  background:radial-gradient(circle at 36% 32%, #FFE583 0%, #FFC22F 46%, #F09905 100%);
+  box-shadow:inset -2px -3px 6px rgba(170,90,0,.28), 0 0 14px rgba(255,180,40,.35);
+}
+@keyframes friedIn{
+  0%  {opacity:0;transform:translate(-50%,-50%) scale(.3) rotate(-14deg);}
+  58% {opacity:1;transform:translate(-50%,-50%) scale(1.09) rotate(3deg);}
+  78% {transform:translate(-50%,-50%) scale(.98) rotate(-1deg);}
+  100%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0deg);}
+}
+@keyframes friedWobble{
+  0%,100%{transform:translate(-50%,-50%) scale(1) rotate(0deg);}
+  50%{transform:translate(-50%,-50%) scale(1.03) rotate(-2deg);}
+}
+.chick{
+  position:absolute;left:71%;top:15%;width:50px;height:50px;z-index:9;
+  transform:translate(-50%,0);transform-origin:50% 100%;pointer-events:none;
+  animation:chickPop .5s cubic-bezier(.2,1.5,.35,1) both,
+            chickBob 1.05s ease-in-out .5s infinite;
+}
+.chick svg{display:block;width:100%;height:100%;}
+@keyframes chickPop{
+  0%  {opacity:0;transform:translate(-50%,16px) scale(.3);}
+  60% {opacity:1;transform:translate(-50%,-5px) scale(1.08);}
+  100%{opacity:1;transform:translate(-50%,0) scale(1);}
+}
+@keyframes chickBob{
+  0%,100%{transform:translate(-50%,0) scale(1);}
+  50%{transform:translate(-50%,-3px) scale(1.02);}
+}
+
 /* 气泡 */
 .prankPop{
   position:absolute;left:50%;top:8px;z-index:8;
@@ -589,17 +641,6 @@ body.started #page{opacity:1;pointer-events:auto;}
 .qrPh span{font-size:10.5px;line-height:1.7;font-weight:500;letter-spacing:.02em;}
 .qrline{margin:0;font-size:12.5px;line-height:1.95;font-weight:500;color:var(--muted);letter-spacing:.04em;}
 .qrfallback{margin-top:16px;font-size:11px;line-height:1.8;font-weight:500;color:var(--muted);opacity:.75;word-break:break-all;}
-
-.note{
-  width:calc(100% - 28px);max-width:612px;margin:34px auto 0;
-  padding:20px 20px 22px;
-  border:1px solid rgba(150,185,235,.14);
-  border-radius:16px;
-  background:rgba(150,185,235,.035);
-}
-.note h2{margin:0 0 10px;font-size:14px;letter-spacing:.2em;font-weight:700;color:var(--text);}
-.note p{margin:0 0 8px;font-size:13.5px;line-height:1.95;font-weight:500;color:var(--muted);letter-spacing:.02em;}
-.note p:last-child{margin-bottom:0;}
 
 footer{
   width:calc(100% - 28px);max-width:var(--page);margin:34px auto 0;
@@ -772,12 +813,6 @@ footer{
     </div>
   </section>
 
-  <section class="note">
-    <h2 id="noteTitle"></h2>
-    <p id="noteBody"></p>
-    <p id="noteBody2"></p>
-  </section>
-
   <footer id="footer"></footer>
 </div>
 
@@ -837,10 +872,6 @@ var CONFIG = {
   },
 
   QR_LINE: "这是本页唯一的中心。<br>它必须连到外面去。",
-
-  NOTE_TITLE: "这一页可以复制",
-  NOTE_BODY: "它就是一个文件，没有后台，没有账号，不收集任何东西。",
-  NOTE_BODY2: "存下来，把日期和二维码改掉，它就是你那一场的入口。",
 
   FOOTER: "没有免费的鸡蛋，但有免费的 token"
 };
@@ -1286,11 +1317,11 @@ function updateLeft(){
 /* ============================================================
    ⑤+ 彩蛋：点蛋的时候埋几个坑
    PRANK_BY_INDEX 决定哪颗蛋演什么，改这里就行：
-   'fake' 骗你一下 / 'morph' 变成别的蛋
+   'fried' 打蛋：荷包蛋 + 小鸡 / 'morph' 变成别的蛋
    没写的就是普通蛋。彩蛋一颗只演一次，演完要点第二下才开内容。
    二维码只在最后出现，这里不放。
    ============================================================ */
-var PRANK_BY_INDEX = { 1:'fake', 3:'morph' };
+var PRANK_BY_INDEX = { 1:'fried', 3:'morph' };
 var KINDS = [
   { cls:'kind-quail',   name:'鹌鹑蛋' },
   { cls:'kind-duck',    name:'鸭蛋' },
@@ -1339,15 +1370,50 @@ function finishPrank(cell){
   if (lab) lab.textContent = '再点一下';
 }
 
-/* ① 假装碎了 */
-function prankFake(cell){
+/* ① 打蛋：荷包蛋 + 小鸡 */
+var CHICK_SVG =
+  '<svg viewBox="0 0 64 64" aria-hidden="true">' +
+    '<ellipse cx="32" cy="42" rx="17" ry="15" fill="#FFD84D"/>' +
+    '<circle cx="32" cy="23" r="12.5" fill="#FFE06A"/>' +
+    '<path d="M43 22 l9 5.5 -9 4.5 z" fill="#FF9C1A"/>' +
+    '<circle cx="27.5" cy="20.5" r="1.9" fill="#3B2A00"/>' +
+    '<circle cx="37" cy="20.5" r="1.9" fill="#3B2A00"/>' +
+    '<path d="M30 11 q0 -5 5 -7 q-2 5 0 7" fill="none" stroke="#F5C400" stroke-width="2.5" stroke-linecap="round"/>' +
+    '<path d="M19 41 q-6 3 -5 8 q6 1 9 -4 z" fill="#F5C400"/>' +
+    '<path d="M27 56 v6 M38 56 v6" stroke="#EDB200" stroke-width="3" stroke-linecap="round"/>' +
+  '</svg>';
+
+function prankFried(cell){
+  var egg = cell.querySelector('.egg');
   cell.classList.add('prank-shake');
-  spawnBits(cell, 10);
+  spawnBits(cell, 8);
+
   setTimeout(function(){
     cell.classList.remove('prank-shake');
-    popCell(cell, '哈哈，骗你一下。', 1500);
-  }, 540);
-  setTimeout(function(){ finishPrank(cell); }, 2150);
+    egg.classList.add('away');
+
+    var pan = document.createElement('span');
+    pan.className = 'friedEgg';
+    pan.innerHTML = '<i class="white w1"></i><i class="white w2"></i><i class="white w3"></i><i class="yolk"></i>';
+    cell.appendChild(pan);
+
+    setTimeout(function(){
+      var chick = document.createElement('span');
+      chick.className = 'chick';
+      chick.innerHTML = CHICK_SVG;
+      cell.appendChild(chick);
+      popCell(cell, '叽！', 900);
+    }, 400);
+
+    setTimeout(function(){
+      var f = cell.querySelector('.friedEgg');
+      var c = cell.querySelector('.chick');
+      if (f) f.remove();
+      if (c) c.remove();
+      egg.classList.remove('away');
+      finishPrank(cell);
+    }, 2300);
+  }, 200);
 }
 
 /* ② 变成别的蛋 */
@@ -1392,7 +1458,7 @@ function tapCell(i){
     cell.dataset.pranked = '1';
     cell.dataset.pranking = '1';
     cell.classList.add('pranked', 'pranking');
-    if (prank === 'fake') prankFake(cell);
+    if (prank === 'fried') prankFried(cell);
     else if (prank === 'morph') prankMorph(cell);
     return;
   }
@@ -1867,9 +1933,6 @@ if ('IntersectionObserver' in window){
 /* ============================================================
    ⑩ 静态文案
    ============================================================ */
-document.getElementById('noteTitle').textContent = CONFIG.NOTE_TITLE;
-document.getElementById('noteBody').textContent  = CONFIG.NOTE_BODY;
-document.getElementById('noteBody2').textContent = CONFIG.NOTE_BODY2;
 document.getElementById('qrline').innerHTML      = CONFIG.QR_LINE;
 document.getElementById('footer').textContent    = CONFIG.FOOTER;
 nextBtn.textContent = CONFIG.NEXT_LABEL;
